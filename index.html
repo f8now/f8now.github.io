@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>排序可视化</title>
+	<style>
+		input{
+			width:80px;
+			font-size:16px;
+			margin:5px;
+		}
+		select{
+			font-size:16px;
+			margin:5px;
+		}
+		button{
+			font-size:16px;
+			margin:5px;
+		}
+	</style>
+</head>
+<body>
+	<div>
+		柱子数量：<input id="inputSum" type="number" value="50">
+		间隔毫秒：<input id="inputInterval" type="number" value="80">
+		排序方式：
+		<select id="sortType">
+			<option value="asc">从小到大</option>
+			<option value="desc">从大到小</option>
+		</select>
+		<button id="startBtn">开始排序</button>
+		<button id="resetBtn">重置</button>
+	</div>
+	<canvas id="ox" style="background:#0000ff;border:2px solid #00ff00;"></canvas>
+	<script>
+		const v=document.getElementById("ox");
+		const c=v.getContext("2d");
+		const startBtn=document.getElementById("startBtn");
+		const resetBtn=document.getElementById("resetBtn");
+		const inpSum = document.getElementById("inputSum");
+		const inpInterval = document.getElementById("inputInterval");
+		const selSort = document.getElementById("sortType");
+
+		let variable={
+			d:null,
+			lastime:0,
+			interval:80,
+			sum:50,
+			n:0,
+			b:[],
+			running:false,
+			asc:true
+		};
+
+		//音频全局对象
+		let audioCtx = null;
+		//播放交换音效
+		function playSwapSound(){
+			//第一次点击之后初始化音频（浏览器要求必须用户交互之后才能发声）
+			if(!audioCtx){
+				audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+			}
+			const osc = audioCtx.createOscillator();
+			const gain = audioCtx.createGain();
+			osc.connect(gain);
+			gain.connect(audioCtx.destination);
+			osc.type = "sine";
+			//音调根据当前交换柱子高度，越高声音越高
+			osc.frequency.value = 220 + variable.b[variable.n] * 1.5;
+			gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+			gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.08);
+			osc.start();
+			osc.stop(audioCtx.currentTime+0.08);
+		}
+
+		let k={
+			draw:function(c,sum,b,n){
+				c.clearRect(0,0,v.width,v.height);
+				let barW = v.width/(sum+1);
+				for(let i=1;i<=sum;i++){
+					c.beginPath();
+					let idx = i-1;
+					if(idx === n || idx === n+1){
+						c.fillStyle="#ff0000";
+					}else{
+						c.fillStyle="#00ff00";
+					}
+					c.strokeStyle="#000000";
+					let x = barW*i - barW/2;
+					let h = b[idx];
+					c.rect(x, v.height-h, barW, h);
+					c.lineWidth=barW*0.1;
+					c.fill();
+					c.stroke();
+					c.fillStyle="#ffffff";
+					c.textAlign = "center";
+					c.textBaseline = "bottom";
+					c.font="12px Arial";
+					c.fillText(b[idx],x , v.height - h - 4);
+				}
+			},
+			change:function(n,sum,b,d,asc){
+				if(n<0||n>=sum-1){
+					n=0;
+				}
+				let needSwap;
+				if(asc){
+					needSwap = b[n] > b[n+1];
+				}else{
+					needSwap = b[n] < b[n+1];
+				}
+
+				if(!needSwap){
+					n++;
+					if(d!==null){
+						n=d;
+						d=null;
+					}
+				}
+				else{
+					const m=b[n];
+					b[n]=b[n+1];
+					b[n+1]=m;
+					//发生交换，播放声音
+					playSwapSound();
+					if(d==null)d=n+1;
+					n--;
+				}
+				return {out1:n,out2:d};
+			}
+		}
+
+		function resize(){
+			v.width = window.innerWidth*0.75;
+			v.height = window.innerHeight*0.75;
+			initArray();
+			k.draw(c,variable.sum,variable.b,variable.n);
+		}
+
+		function initArray(){
+			variable.b=[];
+			for(let i=0;i<variable.sum;i++){
+				variable.b[i]=Math.floor(Math.random()*v.height*0.8);
+			}
+			variable.n=0;
+			variable.d=null;
+			variable.running=false;
+		}
+
+		function loop(timestamp){
+			requestAnimationFrame(loop);
+			if(!variable.running)return;
+			if(timestamp-variable.lastime<variable.interval)return;
+			variable.lastime=timestamp;
+			k.draw(c,variable.sum,variable.b,variable.n);
+			const p=k.change(variable.n,variable.sum,variable.b,variable.d,variable.asc);
+			variable.n=p.out1;
+			variable.d=p.out2;
+		}
+
+		startBtn.onclick=function(){
+			let userSum = Number(inpSum.value);
+			let userInterval = Number(inpInterval.value);
+			if(selSort.value === "asc"){
+				variable.asc = true;
+			}else{
+				variable.asc = false;
+			}
+
+			if(userSum<3) userSum=3;
+			if(userSum>200) userSum=200;
+			if(userInterval<10) userInterval=10;
+
+			variable.sum = userSum;
+			variable.interval = userInterval;
+			
+			initArray();
+			variable.running=true;
+			variable.lastime=performance.now();
+		}
+
+		resetBtn.onclick = function(){
+			let userSum = Number(inpSum.value);
+			if(userSum<3) userSum=3;
+			if(userSum>200) userSum=200;
+			variable.sum = userSum;
+			initArray();
+			k.draw(c,variable.sum,variable.b,variable.n);
+		}
+
+		window.onload = function(){
+			resize();
+			loop(0);
+		}
+	</script>
+</body>
+</html>
